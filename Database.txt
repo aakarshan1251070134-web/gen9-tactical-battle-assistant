@@ -1,0 +1,137 @@
+
+"First, we select our database schema pokemon_analytics and show all our normalized tables: Creatures, Types, Moves, creature_moves, Battle_History, Feedback_Memory, and Audit_Logs."
+mysql> USE pokemon_analytics;
+Database changed
+
+
+mysql> SHOW TABLES;
+
+"Here we show the schema structure. Creatures holds base stats with Primary Keys, and creature_moves acts as our junction table handling the many-to-many relationship using Foreign Keys."
++-----------------------------+
+| Tables_in_pokemon_analytics |
++-----------------------------+
+| audit_logs                  |
+| battle_history              |
+| creature_moves              |
+| creatures                   |
+| feedback_memory             |
+| format_tiers                |
+| items                       |
+| moves                       |
+| type_matchups               |
+| types                       |
+| vw_creaturedetails          |
++-----------------------------+
+11 rows in set (0.03 sec)
+
+
+
+
+mysql> DESCRIBE Creatures;
+"Here we show the schema structure. Creatures holds base stats with Primary Keys, and creature_moves acts as our junction table handling the many-to-many relationship using Foreign Keys."
+
+
++-------------------+-------------+------+-----+---------+-------+
+| Field             | Type        | Null | Key | Default | Extra |
++-------------------+-------------+------+-----+---------+-------+
+| Pokemon_ID        | int         | NO   | PRI | NULL    |       |
+| Name              | varchar(50) | NO   |     | NULL    |       |
+| Primary_Type_ID   | int         | NO   | MUL | NULL    |       |
+| Secondary_Type_ID | int         | YES  | MUL | NULL    |       |
+| Base_HP           | int         | NO   |     | NULL    |       |
+| Base_Attack       | int         | NO   |     | NULL    |       |
+| Base_Defense      | int         | NO   |     | NULL    |       |
+| Base_SpAttack     | int         | NO   |     | NULL    |       |
+| Base_SpDefense    | int         | NO   |     | NULL    |       |
+| Base_Speed        | int         | NO   |     | NULL    |       |
++-------------------+-------------+------+-----+---------+-------+
+10 rows in set (0.01 sec)
+
+mysql> DESCRIBE creature_moves;
++------------+------+------+-----+---------+-------+
+| Field      | Type | Null | Key | Default | Extra |
++------------+------+------+-----+---------+-------+
+| Pokemon_ID | int  | NO   | PRI | NULL    |       |
+| Move_ID    | int  | NO   | PRI | NULL    |       |
++------------+------+------+-----+---------+-------+
+2 rows in set (0.00 sec)
+
+
+
+mysql> 
+"This query demonstrates complex INNER JOIN and LEFT JOIN operations across multiple tables to translate foreign key IDs into human-readable type names and combat stats."
+
+SELECT c.Name, t1.Type_Name AS PrimaryType, IFNULL(t2.Type_Name, 'None') AS SecondaryType, c.Base_Attack
+    -> FROM Creatures c
+    -> JOIN Types t1 ON c.Primary_Type_ID = t1.Type_ID
+    -> LEFT JOIN Types t2 ON c.Secondary_Type_ID = t2.Type_ID
+    -> LIMIT 5;
++------------+-------------+---------------+-------------+
+| Name       | PrimaryType | SecondaryType | Base_Attack |
++------------+-------------+---------------+-------------+
+| Caterpie   | Bug         | None          |          30 |
+| Metapod    | Bug         | None          |          20 |
+| Butterfree | Bug         | Flying        |          45 |
+| Weedle     | Bug         | Poison        |          35 |
+| Kakuna     | Bug         | Poison        |          25 |
++------------+-------------+---------------+-------------+
+5 rows in set (0.00 sec)
+
+mysql> SELECT * FROM vw_CreatureDetails LIMIT 5;
+
+"To ensure data abstraction and code reusability, our application queries this pre-compiled virtual table called vw_CreatureDetails instead of writing repetitive join queries."
+
+
++------------+------------+--------------+----------------+-------------+--------------+----------------+------------+---------+
+| Pokemon_ID | Name       | Primary_Type | Secondary_Type | Base_Attack | Base_Defense | Base_SpDefense | Base_Speed | Base_HP |
++------------+------------+--------------+----------------+-------------+--------------+----------------+------------+---------+
+|         10 | Caterpie   | Bug          | None           |          30 |           35 |             20 |         45 |      45 |
+|         11 | Metapod    | Bug          | None           |          20 |           55 |             25 |         30 |      50 |
+|         12 | Butterfree | Bug          | Flying         |          45 |           50 |             80 |         70 |      60 |
+|         13 | Weedle     | Bug          | Poison         |          35 |           30 |             20 |         50 |      40 |
+|         14 | Kakuna     | Bug          | Poison         |          25 |           50 |             25 |         35 |      45 |
++------------+------------+--------------+----------------+-------------+--------------+----------------+------------+---------+
+5 rows in set (0.00 sec)
+
+mysql> CALL sp_GetCreatureStats('Kingambit');
+
+"This calls our Stored Procedure. Stored procedures run modularly on the database server, reducing network overhead and keeping security high since Python only passes a simple call command."
+
+
++------------+-----------+--------------+----------------+-------------+--------------+----------------+------------+---------+
+| Pokemon_ID | Name      | Primary_Type | Secondary_Type | Base_Attack | Base_Defense | Base_SpDefense | Base_Speed | Base_HP |
++------------+-----------+--------------+----------------+-------------+--------------+----------------+------------+---------+
+|        983 | Kingambit | Dark         | Steel          |          95 |          115 |             85 |         85 |     100 |
+|       1082 | Kingambit | Dark         | Steel          |         135 |          120 |             85 |         50 |     100 |
++------------+-----------+--------------+----------------+-------------+--------------+----------------+------------+---------+
+2 rows in set (0.02 sec)
+
+Query OK, 0 rows affected (0.03 sec)
+
+mysql> SELECT * FROM Audit_Logs;
+
+"This displays our Audit_Logs table, which is automatically populated by our AFTER INSERT trigger whenever a battle turn record is written into Battle_History, ensuring database-level auditing."
+
++--------+-------------+---------------------------------------------------------------------------+---------------------+
+| Log_ID | Action_Type | Description                                                               | Log_Timestamp       |
++--------+-------------+---------------------------------------------------------------------------+---------------------+
+|      1 | INSERT      | New battle session logged for Active Unit: Kingambit vs Target: Abomasnow | 2026-10-23 22:09:40 |
++--------+-------------+---------------------------------------------------------------------------+---------------------+
+1 row in set (0.00 sec)
+
+mysql> SELECT * FROM Feedback_Memory LIMIT 5;
+
+"Finally, this is our Feedback_Memory table. User ratings from past battles are stored here with score weights, allowing our decision engine to aggregate them and dynamically influence future move recommendations."
+
++-----------+---------------------+--------------+---------------+-------------------------+-------------------------------+--------------+
+| Memory_ID | Timestamp           | Pokemon_Name | Move_Name     | Appropriateness_Rating  | Damage_Rating                 | Score_Weight |
++-----------+---------------------+--------------+---------------+-------------------------+-------------------------------+--------------+
+|         1 | 2026-10-18 19:28:28 | Kingambit    | Kowtow Cleave | Neutral                 | Yes, secured high damage / KO |            1 |
+|         2 | 2026-10-18 19:28:28 | Kingambit    | Kowtow Cleave | Yes, highly appropriate | Moderate damage               |            1 |
+|         3 | 2026-10-18 19:28:28 | Garchomp     | Earthquake    | No, poor suggestion     | Moderate damage               |           -1 |
+|         4 | 2026-10-18 19:28:28 | Garchomp     | Earthquake    | Neutral                 | Yes, secured high damage / KO |            1 |
+|         5 | 2026-10-18 19:28:28 | Dragapult    | Flamethrower  | Yes, highly appropriate | Yes, secured high damage / KO |            1 |
++-----------+---------------------+--------------+---------------+-------------------------+-------------------------------+--------------+
+5 rows in set (0.00 sec)
+
+mysql>
